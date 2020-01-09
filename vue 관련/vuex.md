@@ -651,7 +651,7 @@ const moduleA = {
     // 3번째 인자인 rootState 가 루트 state가 됨
     sumWithRootCount (state, getters, rootState) {
       return state.count + rootState.count
-    }
+    }  12
   }
 }
 ```
@@ -712,8 +712,6 @@ const store = new Vuex.Store({
 - 전역 네임스페이스의 **actions**을 dispatch 하거나 **mutations**를 commit 하려면  
 dispatch와 commit에 3번째 인자로 **{ root: true }** 를 전달한다.
 
-- 네임스페이스 모듈에서 전역 액션을 등록하려면, **root: true** 를 표시한다.
-
 ```js
 modules: {
   foo: {
@@ -733,13 +731,13 @@ modules: {
       // 디스패치와 커밋도 해당 모듈의 지역화된 것
       // 전역 디스패치/커밋을 위한 `root` 옵션 설정 가능
       someAction ({ dispatch, commit, getters, rootGetters }) {
-        getters.someGetter // -> 'foo/someGetter'
-        rootGetters.someGetter // -> 'someGetter'
+        getters.someGetter            // -> 'foo/someGetter'
+        rootGetters.someGetter        // -> 'someGetter'
 
-        dispatch('someOtherAction') // -> 'foo/someOtherAction'
+        dispatch('someOtherAction')                       // -> 'foo/someOtherAction'
         dispatch('someOtherAction', null, { root: true }) // -> 'someOtherAction'
 
-        commit('someMutation') // -> 'foo/someMutation'
+        commit('someMutation')                       // -> 'foo/someMutation'
         commit('someMutation', null, { root: true }) // -> 'someMutation'
       },
       someOtherAction (ctx, payload) { ... }
@@ -748,34 +746,169 @@ modules: {
 }
 ```
 
-<br/>
-<br/>
+- **전역 액션** 또한 네임스페이스 모듈에서 **root: true** 를 표시한다.
 
-## 수정중..
+```js
+{
+  actions: {
+    someOtherAction ({dispatch}) {
+      dispatch('someAction')
+    }
+  },
+  modules: {
+    foo: {
+      namespaced: true,
+
+      actions: {
+        someAction: {
+          // 전역 액션 등록
+          root: true,
+          handler (namespacedContext, payload) { ... } // -> 'someAction'
+        }
+      }
+    }
+  }
+}
+```
 
 ### 헬퍼에서 네임스페이스 바인딩
 
-state와 actions 를 바인딩할 수 있다.
+mapState, mapGetters, mapActions 그리고 mapMutations 헬퍼를 모듈에 바인딩할 때  
+아래와 같이 어려움
 
 ```js
-import { mapState, mapActions } from 'vuex';
-
-new Vue({
-  el: '#app',
-  store,
-  data: {
-  },
-
-  // 
-  computed: mapState({
-    a: state => state.a.count,
-    b: state => state.b.subModule.count,
-  }),
-
-  //
-  methods: mapActions([
-    'foo'   // this['some/nested/module/foo']() 대신
-            // this.foo로 출력할 수 있다.
+computed: {
+  ...mapState({
+    a: state => state.some.nested.module.a,
+    b: state => state.some.nested.module.b
+  })
+},
+methods: {
+  ...mapActions([
+    // 모듈 path를 다 적어줘야함
+    'some/nested/module/foo', // -> this['some/nested/module/foo']()
+    'some/nested/module/bar' // -> this['some/nested/module/bar']()
   ])
-});
+}
+```
+
+따라서, 모듈의 네임스페이스 문자열을 헬퍼의 첫 번째 인수로 전달하여  
+해당 모듈을 컨텍스트로 사용하여 모든 바인딩한다.
+
+```js
+computed: {
+  ...mapState('some/nested/module', {
+    a: state => state.a,
+    b: state => state.b
+  })
+},
+methods: {
+  // 공통되는 path를 첫번째 인수로 전달
+  ...mapActions('some/nested/module', [
+    'foo', // -> this.foo()
+    'bar' // -> this.bar()
+  ])
+}
+```
+
+**createNamespacedHelpers** 를 사용하여 네임스페이스 헬퍼를 생성할 수도 있다.
+
+```js
+import { createNamespacedHelpers } from 'vuex'
+
+// 네임스페이스 헬퍼 생성
+const { mapState, mapActions } = createNamespacedHelpers('some/nested/module')
+
+export default {
+  computed: {
+    // 'some/nested/module' 에서 찾음
+    ...mapState({
+      a: state => state.a,
+      b: state => state.b
+    })
+  },
+  methods: {
+    // 'some/nested/module' 에서 찾음
+    ...mapActions([
+      'foo',
+      'bar'
+    ])
+  }
+}
+```
+
+> **[플러그인 개발자를 위한 주의 사항](https://vuex.vuejs.org/kr/guide/modules.html)**  
+>
+> 플러그인을 개발할 때는 사용자의 Vues store와 namespace 오류를 주의해야한다.  
+플러그인 사용자가 특정 모듈을 namespace 모듈 하위에 추가하면  
+해당 모듈도 동일한 namespace스로 등록된다. 따라서 **플러그인 옵션**을 통해  
+namespace 값을 전달받을 수 있어야한다.
+>
+> ```js
+> // 플러그인 옵션을 통해 네임스페이스 값 전달
+> // 그리고 Vuex 플러그인 함수를 반환
+> export function createPlugin (options = {}) {
+>   return function (store) {
+>     // add namespace to plugin module's types
+>     const namespace = options.namespace || ''
+>     store.dispatch(namespace + 'pluginAction')
+>   }
+> }
+> ```
+
+### 동적 모듈 등록
+
+동적 모듈 등록을 사용하면 다른 Vue 플러그인도 애플리케이션의 저장소에 모듈을 연결하여  
+상태 관리에 Vuex를 활용할 수 있다. 예를 들어 [vuex-router-sync](https://github.com/vuejs/vuex-router-sync) 라이브러리는 동적으로 연결된 모듈에서  
+애플리케이션의 라우트 상태를 관리해 vue-router와 vuex를 통합한다.
+
+**store.registerModule 메소드**로 저장소가 생성 된 후에 모듈을 등록 할 수 있다.
+
+```js
+store.registerModule('myModule', {
+  // ...
+})
+
+// `nested/myModule` 중첩 모듈 등록
+store.registerModule(['nested', 'myModule'], {
+  // ...
+})
+
+// 이때 모듈의 상태는
+// store.state.myModule와
+// store.state.nested.myModule로 노출
+```
+
+- **store.unregisterModule(moduleName)** 을 사용하여 동적으로 등록 된 모듈을 제거 가능  
+( 이 방법으로는 정적 모듈(저장소 생성시 선언 됨)을 제거 할 수 없다. )
+
+- 새 모듈을 등록할 때 이전 상태를 유지하고자 할 때는 **preserveState 옵션** 을 사용한다.
+
+  ```js
+  store.registerModule('a', module, { preserveState: true })
+  ```
+
+### 모듈 재사용
+
+한 모듈에서 여러 인스턴스를 생성할 때 일반 객체를 사용하여 모듈의 상태를 선언하면  
+상태 객체가 참조에 의해 공유되고 변이될 때 교차 저장소 혹은 모듈의 상태가 오염된다.
+
+이의 예는 아래와 같다.  
+
+- 동일 모듈을 사용하는 여러 저장소 생성 (예. [SSR 에서 싱글톤 상태 피하기](https://ssr.vuejs.org/guide/structure.html#avoid-stateful-singletons) 에서 runInNewContext 옵션이 false나 once일 때)
+  > SSR(서버 사이드 렌더링)에서 싱글톤 객체를 만들어 들어오는 모든 요청간에 공유할 수 있다.
+
+- 동일 모듈을 동일 저장소에 여러 번 등록
+
+따라서, 이를 피하기 위해 data를 함수로 return 하듯이 **함수를 사용하여 모듈 상태를 선언**한다.
+
+```js
+const MyReusableModule = {
+  state () {
+    return {
+      foo: 'bar'
+    }
+  },
+  // 변이, 액션, getters...
+}
 ```
