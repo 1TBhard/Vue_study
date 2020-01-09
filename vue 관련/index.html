@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Welcome to Vue</title>
+  <script src="https://unpkg.com/vue"></script>
+</head>
+<body>
+  <div id="app">
+      
+    <div>
+      <span>
+        <img width="20%" :src="img" alt="Vue logo">
+      </span>
+
+      <span>
+        <div>
+           <a :href="my_link">링크</a>
+           <p v-if="inventory > 10">In Stock</p>
+           <p v-else-if="inventory <= 10 && inventory > 0">거의 소진</p>
+           <p v-else >Out of Stock</p>
+        </div>
+      </span>
+    </div>
+
+  </div>
+
+  <script src="main.js"></script>
+</body>
+
+<style>
+  body {
+    flex-direction: column;
+  }
+</style>
+
+</html>
