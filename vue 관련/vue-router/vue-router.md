@@ -95,17 +95,141 @@ vue-router는 라우트 매칭 엔진으로 [path-to-regexp](https://github.com/
 
 ## 중첩 라우트
 
-라우트에서 다음과 같이 경로가 중간까지 동일한 것이 있을 수 있다.
+- 라우터로 화면 이동시 Nested(중첩된) 라우트를 이용하여 여러개의 컴포넌트를 동시에 렌더링 할 수 있다.
+- '/' 로 시작하는 중첩 된 라우트는 루트 경로로 취급
 
-```cmd
-/user/foo/profile                     /user/foo/posts
-+------------------+                  +-----------------+
-| User             |                  | User            |
-| +--------------+ |                  | +-------------+ |
-| | Profile      | |  +------------>  | | Posts       | |
-| |              | |                  | |             | |
-| +--------------+ |                  | +-------------+ |
-+------------------+                  +-----------------+
+
+```html
+const User = {
+  template: `
+    <div class="user">
+      <h2>User {{ $route.params.id }}</h2>
+      <router-view></router-view>
+    </div>
+  `
+}
 ```
 
-vue-router를 이용하여 
+```js
+const router = new VueRouter({
+  routes: [
+    { path: '/user/:id', component: User,
+      children: [
+        // /user/:id 와 일치할 때, 루트 경로
+        {
+          path: '', component: UserHome
+        },
+        {
+          // /user/:id/profile 과 일치 할 때
+          // UserProfile 컴포넌트는 User의 <router-view> 내에 렌더링 된다.
+          path: 'profile',
+          component: UserProfile
+        },
+        {
+          // /user/:id/posts 과 일치 할 때
+          // UserPosts가 User의 <router-view> 내에 렌더링 된다.
+          path: 'posts',
+          component: UserPosts
+        }
+      ]
+    }
+  ]
+})
+```
+
+<br/>
+
+## 이름을 가지는 뷰
+
+경로가 아닌 이름(라우터 별칭 아님 이는 [여기](./뷰-라우터_중급.md)를 참조)으로 컴포넌트를 사용할 수도 있다.
+
+```html
+<router-view class="view one"></router-view>
+<router-view class="view two" name="a"></router-view>
+<router-view class="view three" name="b"></router-view>
+```
+
+```js
+const Foo = { template: '<div>foo</div>' }
+const Bar = { template: '<div>bar</div>' }
+const Baz = { template: '<div>baz</div>' }
+
+const router = new VueRouter({
+  routes: [
+    {
+      // 경로가 '/' 인 경우 Foo, Bar, Baz 순으로 등장함
+      path: '/',
+      components: {
+        default: Foo,
+        a: Bar,   // a
+        b: Baz
+      }
+    }
+  ]
+})
+```
+
+- 결과  
+<kbd>
+  <img width="300px" src="./pic/named_router_component.PNG" />
+</kbd>
+
+<br/>
+
+## 프로그래밍 방식 네비게이션
+
+history 조작을 통해 사용자 기록(history, 웹 페이지 이동한 기록)을 앞뒤로 탐색할 수 있다.
+
+### router.push()
+
+구분| 설명| 예
+:--:|--|:--:
+선언적 방식| html 파일에서 사용 | \<router-link :to="컴포넌트" />
+프로그래밍 방식| js 파일에서 사용 | this.$router.push( {path: '뒤에 붙여지는 경로'} )
+
+```js
+// 리터럴 string
+router.push('home')
+
+// object
+router.push({ path: 'home' })
+
+// 이름을 가지는 라우트
+router.push({ name: 'user', params: { userId: 123 }})
+
+// 쿼리와 함께 사용, 결과는 /register?plan=private
+router.push({ path: 'register', query: { plan: 'private' }})
+```
+
+```html
+<router-link :to="...">
+```
+
+### router.go(n)
+
+- 히스토리 스텍에서 n만큼 이동한다.
+
+```js
+// 앞으로 페이지 이동
+router.go(1)
+
+// 뒤로 페이지 이동
+router.go(-1)
+
+// 지정한 만큼의 기록이 없으면 자동으로 실패
+router.go(-100)
+```
+
+### router.replace(location)
+
+- router.push()와 같은 역활 수행하나 새로운 URL을 히스토리 스택에 추가하지 않음 즉, 현재 URL을 대체함
+
+```js
+// 히스토리 스텍에 추가하지 않고 새로운 url로 대체
+router.replace(...)
+```
+
+```html
+<!-- 클릭하면 router.replace(...) 호출하는 것과 같다. -->
+<route-link :to="..." replace>
+```
